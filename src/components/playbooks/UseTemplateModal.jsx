@@ -1,0 +1,182 @@
+import React, { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Building2, Settings, Target, Clock, FileText } from "lucide-react";
+import { Company } from "@/api/entities";
+import { Workflow } from "@/api/entities";
+import { Activity } from "@/api/entities";
+
+export default function UseTemplateModal({ templates, open, onClose, onSuccess, companies = [] }) {
+  const [selectedCompany, setSelectedCompany] = useState("");
+  const [selectedWorkflow, setSelectedWorkflow] = useState("");
+  const [selectedStage, setSelectedStage] = useState("");
+  const [workflows, setWorkflows] = useState([]);
+  const [stages, setStages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (selectedCompany) {
+      loadWorkflows();
+    }
+  }, [selectedCompany]);
+
+  useEffect(() => {
+    if (selectedWorkflow) {
+      const workflow = workflows.find(w => w.id === selectedWorkflow);
+      setStages(workflow?.stages || []);
+      setSelectedStage("");
+    }
+  }, [selectedWorkflow, workflows]);
+
+  const loadWorkflows = async () => {
+    try {
+      const allWorkflows = await Workflow.list();
+      const companyWorkflows = allWorkflows.filter(w => w.company_id === selectedCompany);
+      setWorkflows(companyWorkflows);
+    } catch (error) {
+      console.error("Erro ao carregar workflows:", error);
+    }
+  };
+
+  const handleUseTemplates = async () => {
+    if (!selectedCompany || !selectedWorkflow || !selectedStage) {
+      alert("Selecione empresa, workflow e fase antes de continuar.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const activities = [];
+      
+      // Processar cada template selecionado
+      for (const template of templates) {
+        const activity = {
+          title: template.name,
+          description: template.description || "",
+          company_id: selectedCompany,
+          workflow_id: selectedWorkflow,
+          stage: selectedStage,
+          status: "pending",
+          priority: "medium",
+          assigned_to: [],
+          checklist: template.checklist || [],
+          due_date: new Date(Date.now() + (template.days_to_complete || 1) * 24 * 60 * 60 * 1000).toISOString()
+        };
+        activities.push(activity);
+      }
+
+      // Criar todas as atividades
+      await Promise.all(activities.map(activity => Activity.create(activity)));
+      
+      alert(`${activities.length} atividade(s) criada(s) com sucesso!`);
+      onSuccess();
+      onClose();
+    } catch (error) {
+      console.error("Erro ao usar templates:", error);
+      alert("Erro ao criar atividades. Tente novamente.");
+    }
+    setIsLoading(false);
+  };
+
+  const templateNames = Array.isArray(templates) ? templates : [templates];
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="bg-[#1C1C1C] border-[#656464] text-[#D9D9D9] max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-[#E50F5F]">
+            Usar Template{templateNames.length > 1 ? 's' : ''}: {templateNames.length > 1 ? `${templateNames.length} selecionados` : templateNames[0]?.name}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-6 py-6">
+          <div className="flex items-center gap-4 p-4 bg-[#131313] rounded-lg border border-[#656464]">
+            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+              <FileText className="w-3 h-3 mr-1" />
+              {templateNames.length} template{templateNames.length > 1 ? 's' : ''}
+            </Badge>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <Label className="text-[#D9D9D9] mb-2 block">
+                <Building2 className="w-4 h-4 inline mr-2" />
+                Selecione a Empresa
+              </Label>
+              <Select value={selectedCompany} onValueChange={setSelectedCompany}>
+                <SelectTrigger className="bg-[#131313] border-[#656464] text-[#D9D9D9]">
+                  <SelectValue placeholder="Escolha uma empresa" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#1C1C1C] border-[#656464]">
+                  {companies.map(company => (
+                    <SelectItem key={company.id} value={company.id} className="text-[#D9D9D9]">
+                      {company.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-[#D9D9D9] mb-2 block">
+                <Settings className="w-4 h-4 inline mr-2" />
+                Selecione o Workflow
+              </Label>
+              <Select value={selectedWorkflow} onValueChange={setSelectedWorkflow} disabled={!selectedCompany}>
+                <SelectTrigger className="bg-[#131313] border-[#656464] text-[#D9D9D9]">
+                  <SelectValue placeholder="Escolha um workflow" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#1C1C1C] border-[#656464]">
+                  {workflows.map(workflow => (
+                    <SelectItem key={workflow.id} value={workflow.id} className="text-[#D9D9D9]">
+                      {workflow.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-[#D9D9D9] mb-2 block">
+                <Target className="w-4 h-4 inline mr-2" />
+                Selecione a Fase
+              </Label>
+              <Select value={selectedStage} onValueChange={setSelectedStage} disabled={!selectedWorkflow}>
+                <SelectTrigger className="bg-[#131313] border-[#656464] text-[#D9D9D9]">
+                  <SelectValue placeholder="Escolha uma fase" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#1C1C1C] border-[#656464]">
+                  {stages.map(stage => (
+                    <SelectItem key={stage.name} value={stage.name} className="text-[#D9D9D9]">
+                      {stage.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-[#656464]">
+            <Button
+              variant="outline"
+              onClick={onClose}
+              className="border-[#656464] text-[#D9D9D9] bg-[#131313] hover:bg-[#656464]/20"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleUseTemplates}
+              disabled={!selectedCompany || !selectedWorkflow || !selectedStage || isLoading}
+              className="bg-[#E50F5F] hover:bg-[#E50F5F]/80 text-white"
+            >
+              {isLoading ? "Criando atividades..." : `Usar Template${templateNames.length > 1 ? 's' : ''}`}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
